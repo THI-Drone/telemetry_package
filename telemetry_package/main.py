@@ -5,12 +5,12 @@ from rclpy.node import Node
 from common_package_py.common_node import CommonNode
 
 
-class MinimalPublisher(CommonNode):
-    """A class that represents a minimal node.
+class TelemetryNode(CommonNode):
+    """A class that represents a telemetry node.
     """
     
     def __init__(self, id: str):
-        """Creates a new MinimalPublisher node.
+        """Creates a new TelemetryNode.
 
         Args:
             id (str): Unique node id
@@ -22,11 +22,11 @@ class MinimalPublisher(CommonNode):
 def main(args=None):
     rclpy.init(args=args)
 
-    minimal_publisher = MinimalPublisher(sys.argv[1])
+    telemetry_node = TelemetryNode("telemetry_node")
 
-    rclpy.spin(minimal_publisher)
+    rclpy.spin(telemetry_node)
 
-    minimal_publisher.destroy_node()
+    telemetry_node.destroy_node()
     rclpy.shutdown()
 
 

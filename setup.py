@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'demo_package_py'
+package_name = 'telemetry_package'
 
 setup(
     name=package_name,
@@ -13,14 +13,14 @@ setup(
     ],
     install_requires=['setuptools', 'common_package_py'],
     zip_safe=True,
-    maintainer='philipp',
-    maintainer_email='phg6386@thi.de',
-    description='TODO: Package description',
+    maintainer='Mauro',
+    maintainer_email='maf0115@thi.de',
+    description='ROS Node with the telemetry functionality',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'demo_node = demo_package_py.main:main',
+            'telemetry_node = telemetry_package.main:main',
         ],
     },
 )
