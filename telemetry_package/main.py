@@ -8,14 +8,14 @@ from common_package_py.common_node import CommonNode
 class TelemetryNode(CommonNode):
     """A class that represents a telemetry node.
     """
-    
+
     def __init__(self, id: str):
         """Creates a new TelemetryNode.
 
         Args:
             id (str): Unique node id
         """
-        
+
         super().__init__(id)
 
 
