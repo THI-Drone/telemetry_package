@@ -1,140 +1,77 @@
-'''
-This code gets too many messages all at once. Hence it needs to: 
-    - The Node only sends the first message it receives
-'''
-
-
 import json
+import rclpy
+import socket
 import os
 import select
-import socket
-# import sys
-import rclpy
-from rclpy.node import Node
-from rcl_interfaces.msg import Log
 
+from rcl_interfaces.msg import Log
+from common_package_py.common_node import CommonNode
 
 DEFAULT_UNIX_SOCKET_PATH = "/tmp/thi_drone"
 
-
-class MinimalPublisher(Node):
+class TelemetryNode(CommonNode):
 
     def __init__(self):
+        # The creation of the needed sockets takes place in the constructor
         super().__init__('telemetry_node')
-        self.subscription = self.create_subscription(
-            Log,
-            '/rosout',
-            self.run_server, 
-            100)
-        self.subscription 
 
-        # Counter for debugging purposes
-        self.msg_cnt = 0
-
-        self.msg_cache = list()
-        self.cache_size = 400
-
-
-    def is_socket_closed(self, sock: socket.socket) -> bool:
-        try:
-            # this will try to read bytes without blocking and also without removing them from buffer (peek only)
-            data = sock.recv(16, socket.MSG_DONTWAIT | socket.MSG_PEEK)
-            if len(data) == 0:
-                return True
-        except BlockingIOError:
-            return False  # socket is open and reading from it would block
-        except ConnectionResetError:
-            return True  # socket was closed for some other reason
-        except Exception as e:
-            self.get_logger().error(f"Unexpected exception when checking if the socket is closed: {e}")
-            return False
-        return False
-    
-
-    '''
-    Code to implement the websocket functionality     
-    '''
-    def socket_exists(self, socket_path: str) -> bool:
-        return os.path.exists(socket_path)
-
-
-    def send_message(self, client_socket):
-        """
-        Defines the message block to be continuosly send.
-        """
-        if len(self.msg_cache) > 0:
-            client_socket.sendall(json.dumps(self.msg_cache[0]).encode())
-            self.get_logger().info(f'Send message #{self.msg_cnt + 1}')
-            self.msg_cnt += 1     
-            self.msg_cache.pop(0)  
-
-
-    def run_server(self, msg, socket_path=DEFAULT_UNIX_SOCKET_PATH):
-        # Check if socket is in use
-        if self.socket_exists(socket_path):
-            self.get_logger().fatal(f'Socket path already exists')
-            raise FileExistsError('')
-
-        # Create a socket
-        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        if os.path.exists(DEFAULT_UNIX_SOCKET_PATH): 
+            print('Socket already exists')
+            raise FileExistsError
+            
+        # Create server socket
+        self.server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
         try:
-            # Bind socket
-            server_socket.bind(socket_path)
-            self.get_logger().info(f'Binding socket.')
+            # Bind server socket and listen for a connection. The node is blocked as long as a connection does not exist
+            self.server_sock.bind(DEFAULT_UNIX_SOCKET_PATH)
+            self.server_sock.listen(1)
 
-            # Listen for connection
-            server_socket.listen(1)
-            self.get_logger().info(f'Listening for connection on {socket_path} "...')
+            # Getting the reference for the client socket
+            readable, _, _, = select.select([self.server_sock], [], [])
+            for sock in readable:
+                if sock == self.server_sock:
+                    # Accept the connection
+                    self.client_sock, _ = self.server_sock.accept()
+                    print('connection accepted. Creating Subscription')
 
-            while True:
-                # Appending the stream of sent messages so that the socket can take that amount of traffic
-                self.msg_cache.append(msg.data)
-                self.get_logger().info(f'Received message with following payload: {self.msg_cache[len(self.msg_cache) - 1]}')
+                    '''
+                    Creating the subscription after the connection has accepted ensures that the callback function is executed only after the soccket is connected
+                    '''
+                    self.subscription = self.create_subscription(
+                        Log,
+                        '/rosout',
+                        self.subscription_callback, 
+                        100)
+                    self.subscription
 
-                if len(self.msg_cache) > self.cache_size: 
-                    self.msg_cache.pop(0)
+        # In case of exceptions, close the socket and remove its path from disk
+        except Exception as e:
+            print(f'Error occurred: {e}')
+            self.server_sock.close()
+            os.remove(DEFAULT_UNIX_SOCKET_PATH)
+        
+ 
+    def subscription_callback(self, log_msg):
+        try: 
+            '''
+            Apparently, some characters in the log messages upset something in the json.loads(<received_data>.decode()) function. This is just a brute sanitization of the string, which needs to be implemented in a function of its own
+            '''
+            log_msg.msg = log_msg.msg.replace(':', '').replace('"', '').replace("'", "").replace("\{", "").replace("}", "")
 
-
-                readable, _, _, = select.select([server_socket], [], [])
-                for sock in readable:
-                    if sock == server_socket:
-                        # Accept the connection
-                        client_socket, _ = server_socket.accept()
-                        self.get_logger().info(f'Connection accepted')
-
-                        try:
-                            while True:
-                                self.get_logger().info(f'Sending the following message through websocket: {msg.data}')
-                                self.send_message(client_socket)
-
-                        except Exception as e:
-                            self.get_logger().error(f'Error sending data, {e}')
-
-                        finally:
-                            # Close client socket
-                            self.get_logger().info(f'Closing socket.')
-                            client_socket.close()
+            self.client_sock.sendall(json.dumps({"type": "std" , "content" :  log_msg.msg}).encode())
 
         except Exception as e:
-            self.get_logger().fatal(f'The following error eccured before the socket could be bound: {e}')
-
-        finally:
-            server_socket.close()
-            self.get_logger().info(f'Closing socket and removing {DEFAULT_UNIX_SOCKET_PATH}.')
-            os.remove(socket_path)
+            print(f'Error occurred in callback: {e}')
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    telemetry_node = MinimalPublisher()
+    telemetry_node = TelemetryNode()
 
     rclpy.spin(telemetry_node)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     telemetry_node.destroy_node()
     rclpy.shutdown()
 
