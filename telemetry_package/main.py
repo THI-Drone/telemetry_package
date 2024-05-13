@@ -16,34 +16,33 @@ class TelemetryNode(CommonNode):
         super().__init__('telemetry_node')
 
         if os.path.exists(DEFAULT_UNIX_SOCKET_PATH): 
-            print('Socket already exists')
-            raise FileExistsError
-            
-        # Create server socket
-        self.server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            raise FileExistsError('Socket already exists')
 
-        try:
+        try:         
+            # Create server socket
+            self.server_sock = socket.socket(socket.AF_UNIX, socket.        SOCK_STREAM)
+
             # Bind server socket and listen for a connection. The node is blocked as long as a connection does not exist
             self.server_sock.bind(DEFAULT_UNIX_SOCKET_PATH)
+
+            print("Blocking until connection is established...")
             self.server_sock.listen(1)
 
             # Getting the reference for the client socket
             readable, _, _, = select.select([self.server_sock], [], [])
-            for sock in readable:
-                if sock == self.server_sock:
-                    # Accept the connection
-                    self.client_sock, _ = self.server_sock.accept()
-                    print('connection accepted. Creating Subscription')
+            if self.server_sock in readable:            
+                # Accept the connection
+                self.client_sock, _ = self.server_sock.accept()
+                print('Connection accepted. Creating Subscription')
 
-                    '''
-                    Creating the subscription after the connection has accepted ensures that the callback function is executed only after the soccket is connected
-                    '''
-                    self.subscription = self.create_subscription(
-                        Log,
-                        '/rosout',
-                        self.subscription_callback, 
-                        100)
-                    self.subscription
+                
+            # Creating the subscription after the connection has accepted ensures that the callback function is executed only after the socket is connected           
+            self.subscription = self.create_subscription(
+                Log,
+                '/rosout',
+                self.subscription_callback, 
+                100)
+            self.subscription
 
         # In case of exceptions, close the socket and remove its path from disk
         except Exception as e:
