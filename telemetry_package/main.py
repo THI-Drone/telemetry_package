@@ -2,66 +2,122 @@ import json
 import rclpy
 import socket
 import os
-import select
+import re
 
 from rcl_interfaces.msg import Log
 from common_package_py.common_node import CommonNode
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy, QoSLivelinessPolicy
 
 DEFAULT_UNIX_SOCKET_PATH = "/tmp/thi_drone"
 
 class TelemetryNode(CommonNode):
 
     def __init__(self):
-        # The creation of the needed sockets takes place in the constructor
         super().__init__('telemetry_node')
+        qos_profile = QoSProfile( 
+            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
+            durability=QoSDurabilityPolicy.RMW_QOS_POLICY_DURABILITY_VOLATILE, 
+            liveliness = QoSLivelinessPolicy.RMW_QOS_POLICY_LIVELINESS_AUTOMATIC
+        )
 
         if os.path.exists(DEFAULT_UNIX_SOCKET_PATH): 
-            raise FileExistsError('Socket already exists')
+            print('Socket already exists.')
+            raise FileExistsError
+            
+        self.server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
-        try:         
-            # Create server socket
-            self.server_sock = socket.socket(socket.AF_UNIX, socket.        SOCK_STREAM)
-
-            # Bind server socket and listen for a connection. The node is blocked as long as a connection does not exist
+        try:
             self.server_sock.bind(DEFAULT_UNIX_SOCKET_PATH)
-
-            print("Blocking until connection is established...")
             self.server_sock.listen(1)
 
-            # Getting the reference for the client socket
-            readable, _, _, = select.select([self.server_sock], [], [])
-            if self.server_sock in readable:            
-                # Accept the connection
-                self.client_sock, _ = self.server_sock.accept()
-                print('Connection accepted. Creating Subscription')
+            # Accept the connection
+            self.client_sock, _ = self.server_sock.accept()
+            print('Connection accepted. Creating subscription')
 
-                
-            # Creating the subscription after the connection has accepted ensures that the callback function is executed only after the socket is connected           
-            self.subscription = self.create_subscription(
+            # After connecting, create two subscriptions: one to the '/rosout' topic and one to the 'control' topic
+            self.rosout_subscription = self.create_subscription(
                 Log,
                 '/rosout',
-                self.subscription_callback, 
-                100)
-            self.subscription
+                self.rosout_callback, 
+                qos_profile = qos_profile)
+            
+            # Commenting this out for test purposes
+            # self.control_subscription = self.create_subscription(
+            #     Log,
+            #     'control',
+            #     self.control_subscription_callback, 
+            #     qos_profile = qos_profile)
+            
+            self.rosout_subscription
+            print('Created subscription to "/rosout"')
 
-        # In case of exceptions, close the socket and remove its path from disk
+            # self.control_subscription 
+            print('Created subscription to "control".')
+
         except Exception as e:
             print(f'Error occurred: {e}')
             self.server_sock.close()
             os.remove(DEFAULT_UNIX_SOCKET_PATH)
         
- 
-    def subscription_callback(self, log_msg):
+
+    '''
+    @brief This function sanitizes incoming messages so that they do not collide with JSON format guidelines
+
+    @param msg message to sanitize
+
+    @return str
+    '''
+    def sanitize_message(self, msg : str)->str:
         try: 
-            '''
-            Apparently, some characters in the log messages upset something in the json.loads(<received_data>.decode()) function. This is just a brute sanitization of the string, which needs to be implemented in a function of its own
-            '''
-            log_msg.msg = log_msg.msg.replace(':', '').replace('"', '').replace("'", "").replace("\{", "").replace("}", "")
+            msg = re.sub("[\{\}:']", "", msg) 
+            return msg 
+        except Exception as e: 
+            print(f'Error occurred during string sanitization: {e}')
 
-            self.client_sock.sendall(json.dumps({"type": "std" , "content" :  log_msg.msg}).encode())
 
+    '''
+    @brief callback of the subcriptions. 
+
+    This function takes the content of a log message from the /rosout topic, sanitizes it (altough still quite dirtily) and sends it to the ground station webapp via UNIX socket. 
+
+    @param log_msg the message passed by the topic
+    '''
+    def rosout_callback(self, log_msg)->None:
+        try: 
+            log_msg.msg = self.sanitize_message(log_msg.msg)
+
+            #@di-math suggests that this change (#b"\x17") fixes the JSON strings being stitched togeher error 
+            self.client_sock.sendall(json.dumps({"type": "std" , "content" :  log_msg.msg}).encode() + b"\x17")
         except Exception as e:
-            print(f'Error occurred in callback: {e}')
+            print(f'Error occurred in rosout_callback: {e}')
+
+
+    '''
+    @brief callback of the subcriptions. 
+
+    This function takes the content of a message from the control topic sanitizes it (altough still quite dirtily) and sends it to the ground station webapp via UNIX socket. 
+
+    @param msg the message passed by the topic
+    '''
+    def control_callback(self, msg)->None:
+        try: 
+            msg.data = self.sanitize_message(msg.data)
+            self.client_sock.sendall(json.dumps({"type": "std" , "content" :  msg.data}).encode() + b"\x17")
+        except Exception as e:
+            print(f'Error occurred in control_callback: {e}')
+
+
+    '''
+    @brief destructor function of a CommonNode object
+
+    It cleanly closes the socket and removes the socket path from system
+    '''
+    def __del__(self):
+        print('Destructor called.')
+        self.server_sock.close()
+        os.remove(DEFAULT_UNIX_SOCKET_PATH)
 
 
 def main(args=None):
@@ -72,7 +128,7 @@ def main(args=None):
     rclpy.spin(telemetry_node)
 
     telemetry_node.destroy_node()
-    rclpy.shutdown()
+    rclpy.on_shutdown(telemetry_node.__del__())
 
 
 if __name__ == '__main__':
