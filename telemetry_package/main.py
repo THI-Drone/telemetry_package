@@ -15,11 +15,11 @@ class TelemetryNode(CommonNode):
     def __init__(self):
         super().__init__('telemetry_node')
         qos_profile = QoSProfile( 
-            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+            history=QoSHistoryPolicy.KEEP_LAST,
             depth=1,
-            reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
-            durability=QoSDurabilityPolicy.RMW_QOS_POLICY_DURABILITY_VOLATILE, 
-            liveliness = QoSLivelinessPolicy.RMW_QOS_POLICY_LIVELINESS_AUTOMATIC
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            durability=QoSDurabilityPolicy.VOLATILE, 
+            liveliness = QoSLivelinessPolicy.AUTOMATIC
         )
 
         if os.path.exists(DEFAULT_UNIX_SOCKET_PATH): 
@@ -43,18 +43,29 @@ class TelemetryNode(CommonNode):
                 self.rosout_callback, 
                 qos_profile = qos_profile)
             
+            self.rosout_subscription
+            print('Created subscription to "/rosout".')
+
             # Commenting this out for test purposes
             # self.control_subscription = self.create_subscription(
             #     Log,
             #     'control',
             #     self.control_subscription_callback, 
             #     qos_profile = qos_profile)
-            
-            self.rosout_subscription
-            print('Created subscription to "/rosout"')
 
             # self.control_subscription 
             print('Created subscription to "control".')
+
+
+            self.heartbeat_subscription = self.create_subscription(
+               Log,
+               'heartbeat', 
+                qos_profile = qos_profile)
+            
+            self.heartbeat_subscription
+            print('created subscription to "heartbeat".')
+
+            
 
         except Exception as e:
             print(f'Error occurred: {e}')
