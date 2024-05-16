@@ -2,7 +2,6 @@ import json
 import rclpy
 import socket
 import os
-import re
 
 from rcl_interfaces.msg import Log
 from common_package_py.common_node import CommonNode
@@ -47,6 +46,8 @@ class TelemetryNode(CommonNode):
             print('Created subscription to "/rosout".')
 
             # Commenting this out for test purposes
+
+            # Modify the message type and topic name
             # self.control_subscription = self.create_subscription(
             #     Log,
             #     'control',
@@ -54,9 +55,9 @@ class TelemetryNode(CommonNode):
             #     qos_profile = qos_profile)
 
             # self.control_subscription 
-            print('Created subscription to "control".')
+            # print('Created subscription to "control".')
 
-
+            # Modify the message type and topic name
             self.heartbeat_subscription = self.create_subscription(
                Log,
                'heartbeat', 
@@ -73,20 +74,6 @@ class TelemetryNode(CommonNode):
             os.remove(DEFAULT_UNIX_SOCKET_PATH)
         
 
-    '''
-    @brief This function sanitizes incoming messages so that they do not collide with JSON format guidelines
-
-    @param msg message to sanitize
-
-    @return str
-    '''
-    def sanitize_message(self, msg : str)->str:
-        try: 
-            msg = re.sub("[\{\}:']", "", msg) 
-            return msg 
-        except Exception as e: 
-            print(f'Error occurred during string sanitization: {e}')
-
 
     '''
     @brief callback of the subcriptions. 
@@ -97,8 +84,6 @@ class TelemetryNode(CommonNode):
     '''
     def rosout_callback(self, log_msg)->None:
         try: 
-            log_msg.msg = self.sanitize_message(log_msg.msg)
-
             #@di-math suggests that this change (#b"\x17") fixes the JSON strings being stitched togeher error 
             self.client_sock.sendall(json.dumps({"type": "std" , "content" :  log_msg.msg}).encode() + b"\x17")
         except Exception as e:
@@ -114,7 +99,6 @@ class TelemetryNode(CommonNode):
     '''
     def control_callback(self, msg)->None:
         try: 
-            msg.data = self.sanitize_message(msg.data)
             self.client_sock.sendall(json.dumps({"type": "std" , "content" :  msg.data}).encode() + b"\x17")
         except Exception as e:
             print(f'Error occurred in control_callback: {e}')
