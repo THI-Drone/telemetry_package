@@ -5,25 +5,43 @@ import os
 
 from rcl_interfaces.msg import Log
 from common_package_py.common_node import CommonNode
+from common_package_py.topic_names import TopicNames
+
+from interfaces.msg import Control, Heartbeat
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy, QoSLivelinessPolicy
 
 DEFAULT_UNIX_SOCKET_PATH = "/tmp/thi_drone"
 
 class TelemetryNode(CommonNode):
-
     def __init__(self):
+        '''
+        Constructor function of the TelemetryNode class. 
+
+        This function firstly provides the necessary QoS setting for each subscription responsible for sending data to the ground-station webapp.  
+
+        It then builds the UNIX socket used for the communication with the ground-station frontend and makes the node listen for a connection. The system will raise a warning if the socket is already in use. 
+
+        After building the UNIX socket, this function creates three subscription: one to /rosout, one to TopicNames.Control and one to TopicNames.Heartbeat.  
+
+        Args: 
+            None
+        
+        Returns: 
+            None
+        '''
+
         super().__init__('telemetry_node')
         qos_profile = QoSProfile( 
             history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1,
+            depth=15,
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE, 
             liveliness = QoSLivelinessPolicy.AUTOMATIC
         )
 
+
         if os.path.exists(DEFAULT_UNIX_SOCKET_PATH): 
-            print('Socket already exists.')
-            raise FileExistsError
+            raise FileExistsError('Socket already exists.')
             
         self.server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
@@ -35,38 +53,37 @@ class TelemetryNode(CommonNode):
             self.client_sock, _ = self.server_sock.accept()
             print('Connection accepted. Creating subscription')
 
-            # After connecting, create two subscriptions: one to the '/rosout' topic and one to the 'control' topic
+
             self.rosout_subscription = self.create_subscription(
                 Log,
                 '/rosout',
-                self.rosout_callback, 
+                self.__rosout_callback, 
                 qos_profile = qos_profile)
             
             self.rosout_subscription
             print('Created subscription to "/rosout".')
 
-            # Commenting this out for test purposes
 
-            # Modify the message type and topic name
-            # self.control_subscription = self.create_subscription(
-            #     Log,
-            #     'control',
-            #     self.control_subscription_callback, 
-            #     qos_profile = qos_profile)
+            self.control_subscription = self.create_subscription(
+                Control,
+                TopicNames.Control,
+                qos_profile = qos_profile)
 
-            # self.control_subscription 
-            # print('Created subscription to "control".')
+            self.control_subscription 
+            print('Created subscription to "control".')
 
-            # Modify the message type and topic name
+
             self.heartbeat_subscription = self.create_subscription(
-               Log,
-               'heartbeat', 
+                Heartbeat,
+                TopicNames.Heartbeat, 
+                self.__heartbeat_callback,
                 qos_profile = qos_profile)
             
             self.heartbeat_subscription
             print('created subscription to "heartbeat".')
 
-            
+            # Deactivating the node as according to the docs, could result in an error? (unsure yet)
+            self._deactivate_()
 
         except Exception as e:
             print(f'Error occurred: {e}')
@@ -74,42 +91,71 @@ class TelemetryNode(CommonNode):
             os.remove(DEFAULT_UNIX_SOCKET_PATH)
         
 
+    def __rosout_callback(self, log_msg)->None:
+        '''
+        Callback function for the /rosout subscription. 
 
-    '''
-    @brief callback of the subcriptions. 
+        This function takes each message that is NOT of the severity level DEBUG and sends it tho the ground-station webapp via UNIX socket.
 
-    This function takes the content of a log message from the /rosout topic, sanitizes it (altough still quite dirtily) and sends it to the ground station webapp via UNIX socket. 
+        Args: 
+            log_msg: the incoming log message from the /rosout topic
+        
+            Returns: 
+                None
+        '''
 
-    @param log_msg the message passed by the topic
-    '''
-    def rosout_callback(self, log_msg)->None:
+        if log_msg.level != 'DEBUG':  
+            try: 
+                self.client_sock.sendall(json.dumps(
+                    {"type": "std" ,
+                    "content" : {
+                        "level" : log_msg.level, 
+                        "name" : log_msg.name, 
+                        "msg" : log_msg.msg     
+                            }}  ).encode() + b"\x17")
+            except Exception as e:
+                print(f'Error occurred in rosout_callback: {e}')
+
+
+    def __heartbeat_callback(self, hb_msg)->None:
+        '''
+        Callback function for the TopicNames.Heartbeat subscription. 
+
+        This function takes each message coming from TOpicNames.Heartbeat and sends it tho the ground-station webapp via UNIX socket.
+
+        Args: 
+            hb_msg: the incoming log message from the /rosout topic
+        
+            Returns: 
+                None
+        '''
+
         try: 
-            #@di-math suggests that this change (#b"\x17") fixes the JSON strings being stitched togeher error 
-            self.client_sock.sendall(json.dumps({"type": "std" , "content" :  log_msg.msg}).encode() + b"\x17")
+            self.client_sock.sendall(json.dumps(
+                {"type": "std" ,
+                "content" : {
+                    "sender_id" : hb_msg.sender_id, 
+                    "tick" : hb_msg.tick, 
+                    "active" : hb_msg.active, 
+                    "timestamp" : hb_msg.time_stamp     
+                        }}  ).encode() + b"\x17")
         except Exception as e:
-            print(f'Error occurred in rosout_callback: {e}')
+            print(f'Error occurred in heartbeat_callback: {e}')
 
 
-    '''
-    @brief callback of the subcriptions. 
-
-    This function takes the content of a message from the control topic sanitizes it (altough still quite dirtily) and sends it to the ground station webapp via UNIX socket. 
-
-    @param msg the message passed by the topic
-    '''
-    def control_callback(self, msg)->None:
-        try: 
-            self.client_sock.sendall(json.dumps({"type": "std" , "content" :  msg.data}).encode() + b"\x17")
-        except Exception as e:
-            print(f'Error occurred in control_callback: {e}')
-
-
-    '''
-    @brief destructor function of a CommonNode object
-
-    It cleanly closes the socket and removes the socket path from system
-    '''
     def __del__(self):
+        ''' 
+        Destructor function of the TelemetryNode class. 
+
+        This function ensures that the server is closed cleanly and removed from disk. 
+
+        Args: 
+            None
+        
+        Returns:
+            None 
+        '''
+
         print('Destructor called.')
         self.server_sock.close()
         os.remove(DEFAULT_UNIX_SOCKET_PATH)
@@ -123,6 +169,8 @@ def main(args=None):
     rclpy.spin(telemetry_node)
 
     telemetry_node.destroy_node()
+
+    # Ensures that the destructor function of the TelemetryNode object is executed on program shutdown
     rclpy.on_shutdown(telemetry_node.__del__())
 
 
