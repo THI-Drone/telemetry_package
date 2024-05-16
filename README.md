@@ -26,6 +26,7 @@ This function is the constructor of the node. In the constructor, following thin
     - The delay will be defined as follows: 
         - 2Hz for position and speed data
         - 0.5Hz for the rest of the telemetry data 
+- Fix code formating
 - Write Documentation 
 
 ## Suggestions are gladly accepted. 
