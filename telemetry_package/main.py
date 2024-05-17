@@ -2,6 +2,7 @@ import json
 import rclpy
 import socket
 import os
+import sys
 
 from rcl_interfaces.msg import Log
 from common_package_py.common_node import CommonNode
@@ -39,14 +40,19 @@ class TelemetryNode(CommonNode):
             liveliness = QoSLivelinessPolicy.AUTOMATIC
         )
 
+        self.chosen_socket_path = ''
 
-        if os.path.exists(DEFAULT_UNIX_SOCKET_PATH): 
+        if sys.argv[1] == '': self.chosen_socket_path = DEFAULT_UNIX_SOCKET_PATH
+        else: self.chosen_socket_path = sys.argv[1]
+
+
+        if os.path.exists(self.chosen_socket_path): 
             raise FileExistsError('Socket already exists.')
             
         self.server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
         try:
-            self.server_sock.bind(DEFAULT_UNIX_SOCKET_PATH)
+            self.server_sock.bind(self.chosen_socket_path)
             self.server_sock.listen(1)
 
             # Accept the connection
@@ -88,7 +94,7 @@ class TelemetryNode(CommonNode):
         except Exception as e:
             print(f'Error occurred: {e}')
             self.server_sock.close()
-            os.remove(DEFAULT_UNIX_SOCKET_PATH)
+            os.remove(self.chosen_socket_path)
         
 
     def __rosout_callback(self, log_msg)->None:
@@ -158,7 +164,7 @@ class TelemetryNode(CommonNode):
 
         print('Destructor called.')
         self.server_sock.close()
-        os.remove(DEFAULT_UNIX_SOCKET_PATH)
+        os.remove(self.chosen_socket_path)
 
 
 def main(args=None):
