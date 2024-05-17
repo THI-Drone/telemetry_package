@@ -14,7 +14,7 @@ This function works similarly to `__rosout_callback()` with the difference that 
 ### def __init__(self)
 This function is the constructor of the node. In the constructor, following things are done: 
 - Set the appropriate QoS settings for the various subscripttions
-- Create the UNIX server socket
+- Create the UNIX server socket using either the DEFAULT_UNIX_SOCKET_PATH or, if provided, a path passed via cli 
 - Create a reference to the client socket
 - Create the subscription to the following topics: 
     -`/rosout` 
