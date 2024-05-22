@@ -184,7 +184,7 @@ class TelemetryNode(Node):
                      "sender_id": hb_msg.sender_id,
                      "tick": hb_msg.tick,
                      "active": hb_msg.active,
-                     "timestamp": str(hb_msg.time_stamp)
+                     "timestamp": hb_msg.time_stamp.sec + hb_msg.time_stamp.nanosec / 1e9
                  }}).encode() + b"\x17")
         except Exception as e:
             print(f'Error occurred in heartbeat_callback: {e}')
