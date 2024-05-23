@@ -77,6 +77,7 @@ class TelemetryNode(Node):
             self.server_sock = socket.socket(
                 socket.AF_UNIX, socket.SOCK_STREAM)
             self.server_sock.bind(self.chosen_socket_path)
+            os.chmod(self.chosen_socket_path, 0o777)
             print(
                 f"Listening for connection on the UNIX-socket at {self.chosen_socket_path} ...")
             self.server_sock.listen(1)
