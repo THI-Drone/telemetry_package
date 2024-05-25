@@ -145,6 +145,8 @@ class TelemetryNode(Node):
             None
         """
 
+        print("Recieved " + log_msg.msg + " on /rosout.")
+
         # Filter log messages
         # Don't log DEBUG level messages
         if log_msg.level == rclpy.logging.LoggingSeverity.DEBUG:
@@ -177,6 +179,8 @@ class TelemetryNode(Node):
         Returns: 
             None
         """
+
+        print("Received a heartbeat from " + hb_msg.sender_id + ".")
 
         try:
             self.client_sock.sendall(json.dumps(
