@@ -5,16 +5,29 @@ The functions are described in detail down below.
 
 ## Functions
 
-### subscription_callback(self, log_msg)
-This function sends messages to a client socket in an encoded json format. The messages that the node sends are various log messages, which come from the `/rosout` topic.
+### __rosout_callback(self, log_msg)
+This function sends log messages captured by the `/rosout` topic to a client socket in an encoded json format. 
+
+### __heartbeat_callback(self, hb_msg)
+This function works similarly to `__rosout_callback()` with the difference that it sends the telemetry data instead of log messages. 
 
 ### def __init__(self)
 This function is the constructor of the node. In the constructor, following things are done: 
-- Create the UNIX server socket
+- Set the appropriate QoS settings for the various subscripttions
+- Create the UNIX server socket using either the DEFAULT_UNIX_SOCKET_PATH or, if provided, a path passed via CLI 
 - Create a reference to the client socket
-- Create the subscription to the `/rosout` topic: this ensures that the log-messages sent to the `/rosout` topic are sent to the webapp
+- Create the subscription to the following topics: 
+    -`/rosout` 
+    - `TopicNames.Control`
+    - `TopicNames.Heartbeat`
 
 # To-Dos: 
-- A function is needed to parse the various log messages that get sent to teh client-webapp. Not sanitizing them properly results in an `extra line` error, since apparently, the json.loads(<received_data>.decode()) causes problems if the sent messages contain notation interfering with the JSON-format
-- Implement a better way to remove the socket from path after shutting down the node, since it currently needs to be manually deleted from path before program execution.
+- Fix code formating
+- Implement tests for the following aspects: 
+	- Test performance 
+	- Test robustness of cli functionality for socket path input
+	- Others (work in progress)
+
+
+## Suggestions are gladly accepted. 
 
