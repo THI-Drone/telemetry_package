@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'telemetry_node = telemetry_package.main:main',
-        ],
+            'test_telemetry_node = telemetry_package.test_main:main',
+            ],
     },
 )
