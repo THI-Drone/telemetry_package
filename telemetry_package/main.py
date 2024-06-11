@@ -7,6 +7,7 @@ import time
 
 from rcl_interfaces.msg import Log
 import rclpy.logging
+import rclpy.parameter
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy, QoSLivelinessPolicy
 from common_package_py.topic_names import TopicNames
@@ -50,6 +51,10 @@ class TelemetryNode(Node):
 
         super().__init__('telemetry_node')
 
+        # Get ROS-arg for UNIX-socket-path
+        self.declare_parameter("unix_socket_path", DEFAULT_UNIX_SOCKET_PATH)
+        self.chosen_socket_path = self.get_parameter("unix_socket_path").get_parameter_value().string_value
+
         # Default QoS for the GroundStation - Node
         qos_profile = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
@@ -61,12 +66,6 @@ class TelemetryNode(Node):
 
         # For tracking the timestamps between the last received messages for throttled log-message names
         self._message_throttle_table = {}
-
-        # Assume second and only arg as explicit path to unix socket
-        if len(sys.argv) > 1:
-            self.chosen_socket_path = sys.argv[1]
-        else:
-            self.chosen_socket_path = DEFAULT_UNIX_SOCKET_PATH
 
         # Check if the socket already exists
         if os.path.exists(self.chosen_socket_path):
@@ -89,7 +88,7 @@ class TelemetryNode(Node):
             # Subscribe to /rosout
             self.rosout_subscription = self.create_subscription(
                 Log,
-                '/rosout',
+                'rosout',
                 self.__rosout_callback,
                 qos_profile=qos_profile)
 
