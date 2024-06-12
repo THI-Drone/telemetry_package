@@ -50,6 +50,7 @@ class TelemetryNode(Node):
         """
 
         super().__init__('telemetry_node')
+        self.namespace = self.get_namespace()
 
         # Get ROS-arg for UNIX-socket-path
         self.declare_parameter("unix_socket_path", DEFAULT_UNIX_SOCKET_PATH)
