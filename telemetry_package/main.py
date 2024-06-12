@@ -93,7 +93,7 @@ class TelemetryNode(Node):
                 qos_profile=qos_profile)
 
             self.rosout_subscription
-            print('Created subscription to "/rosout".')
+            print(f'Created subscription to "{self.namespace}/rosout".')
 
             # Subscribe to TopicNames.Heartbeat
             self.heartbeat_subscription = self.create_subscription(
@@ -103,7 +103,7 @@ class TelemetryNode(Node):
                 qos_profile=qos_profile)
 
             self.heartbeat_subscription
-            print('created subscription to "heartbeat".')
+            print(f'created subscription to "{self.namespace}/heartbeat".')
 
         except Exception as e:
             print(f'Error occurred: {e}')
@@ -144,7 +144,7 @@ class TelemetryNode(Node):
             None
         """
 
-        print("Recieved " + log_msg.msg + " on /rosout.")
+        print(f"Recieved " + log_msg.msg + " on {self.namespace}/rosout.")
 
         # Filter log messages
         # Don't log DEBUG level messages
