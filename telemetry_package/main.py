@@ -152,7 +152,8 @@ class TelemetryNode(Node):
         if log_msg.level == rclpy.logging.LoggingSeverity.DEBUG:
             return
         # Check if message should be throttled
-        log_is_higher_severity = log_msg.level == rclpy.logging.LoggingSeverity.WARN or log_msg.level == rclpy.logging.LoggingSeverity.ERROR or log_msg.level == rclpy.logging.LoggingSeverity.FATAL
+        log_is_higher_severity = log_msg.level in (rclpy.logging.LoggingSeverity.WARN, rclpy.logging.LoggingSeverity.ERROR, rclpy.logging.LoggingSeverity.FATAL)
+
         if not log_is_higher_severity and self.throttle_log_message(log_msg):
             return
 
